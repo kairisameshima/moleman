@@ -1,2 +1,6 @@
 /target
 *.pem
+/config.toml
+/config.toml.bak
+/pems/
+.DS_Store

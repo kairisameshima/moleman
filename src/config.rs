@@ -10,10 +10,10 @@ const DEFAULT_CONFIG: &str = r#"# moleman configuration
 # Region used for all AWS calls and tunnels.
 region = "us-east-1"
 
-# Directory where ssh PEM keys live (never tracked by any repo). Bare filenames
-# in `pem = ...` entries below are resolved against this directory; absolute or
-# ~/ paths are used as-is.
-pem_dir = "~/.config/moleman/pems"
+# Directory where ssh PEM keys live (gitignored, never committed). Relative
+# paths sit next to this config file; bare filenames in `pem = ...` entries
+# resolve against it. Absolute or ~/ paths are used as-is.
+pem_dir = "pems"
 
 [services]
 # ECS/Cloud Map services are discovered live from Cloud Map; this profile +
@@ -58,6 +58,9 @@ pub struct Config {
     pub region: String,
     #[serde(default = "default_pem_dir")]
     pub pem_dir: String,
+    /// Directory the config file was loaded from; anchors relative `pem_dir`.
+    #[serde(skip)]
+    pub config_dir: PathBuf,
     pub services: ServicesCfg,
     pub rds: RdsCfg,
     #[serde(default)]
@@ -106,7 +109,7 @@ fn default_ec2_user() -> String {
     "ec2-user".to_string()
 }
 fn default_pem_dir() -> String {
-    "~/.config/moleman/pems".to_string()
+    "pems".to_string()
 }
 
 impl Config {
@@ -124,25 +127,46 @@ impl Config {
         }
         let text = std::fs::read_to_string(&path)
             .with_context(|| format!("reading config {}", path.display()))?;
-        let cfg: Config =
+        let mut cfg: Config =
             toml::from_str(&text).with_context(|| format!("parsing config {}", path.display()))?;
+        cfg.config_dir = match path.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+            _ => std::env::current_dir().context("resolving current dir for config")?,
+        };
         Ok((cfg, path))
     }
 
     /// Resolve a `pem` config value to a path: bare filenames land in `pem_dir`
-    /// (the untracked key folder); anything with a separator or `~` is a path
-    /// of its own.
+    /// (the untracked key folder); anything starting with `~` or `/` is a path
+    /// of its own. `pem_dir` itself, when relative, sits next to the config
+    /// file — so a repo-local `config.toml` gets a repo-local `pems/`.
     pub fn resolve_pem(&self, pem: &str) -> PathBuf {
-        if pem.contains('/') || pem.starts_with('~') {
+        if pem.starts_with('~') || pem.starts_with('/') {
             expand_tilde(pem)
         } else {
-            expand_tilde(&self.pem_dir).join(pem)
+            self.pem_dir_path().join(pem)
+        }
+    }
+
+    /// `pem_dir` as an absolute path (relative values anchor at the config dir).
+    pub fn pem_dir_path(&self) -> PathBuf {
+        let dir = expand_tilde(&self.pem_dir);
+        if dir.is_absolute() {
+            dir
+        } else {
+            self.config_dir.join(dir)
         }
     }
 }
 
-/// `~/.config/moleman/config.toml`, honoring `XDG_CONFIG_HOME`.
+/// Config file location: a `config.toml` in the current directory wins (the
+/// repo-local, untracked setup); otherwise `~/.config/moleman/config.toml`,
+/// honoring `XDG_CONFIG_HOME`.
 pub fn config_path() -> PathBuf {
+    let local = PathBuf::from("config.toml");
+    if local.exists() {
+        return local;
+    }
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home_dir().join(".config"));

@@ -31,9 +31,8 @@ terminal.
   configured with your SSO profiles
 - [`session-manager-plugin`](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
   (required for SSM port-forwarding)
-- `ssh` and your tunnel PEM keys, placed in `~/.config/moleman/pems/` (mode `0600`).
-  Bare filenames in config resolve there; the folder lives outside any repo so
-  keys can never be committed.
+- `ssh` and your tunnel PEM keys, placed in `pems/` next to your `config.toml`
+  (mode `0600`). Both are gitignored, so keys and real config never get committed.
 
 ## Run
 
@@ -42,10 +41,13 @@ cargo run            # debug
 cargo build --release && ./target/release/moleman
 ```
 
-On first run it writes a placeholder config to `~/.config/moleman/config.toml`.
+moleman reads `./config.toml` if present (the repo-local, gitignored setup);
+otherwise it falls back to `~/.config/moleman/config.toml`, scaffolding a
+placeholder there on first run.
 Edit it to add your bastions, service ports, RDS bastions (per SSO session),
 and ssh tunnel entries. `pem = "name.pem"` resolves against `pem_dir`
-(default `~/.config/moleman/pems/`); absolute or `~/` paths are used as-is.
+(default `pems`, resolved next to the config file); absolute or `~/` paths
+are used as-is.
 
 ## Keys
 
@@ -63,7 +65,7 @@ and ssh tunnel entries. `pem = "name.pem"` resolves against `pem_dir`
 
 ## Config
 
-`~/.config/moleman/config.toml`:
+`config.toml`:
 
 - `[services]` — `profile` + `bastion` used for Cloud Map discovery and
   port-forwarding; `[services.ports]` pins conventional local ports; `fallback`
