@@ -9,7 +9,7 @@ use crate::aws::discovery;
 use crate::aws::profiles::{self, AwsConfig};
 use crate::aws::rds::{self, RdsInstance};
 use crate::aws::sso::{self, TokenStatus};
-use crate::config::{self, Config};
+use crate::config::Config;
 use crate::tunnel::{Group, Tunnel, TunnelKind};
 
 const TOAST_TTL: Duration = Duration::from_secs(6);
@@ -118,7 +118,7 @@ impl App {
                 t.name.clone(),
                 Group::Temporal,
                 TunnelKind::Ssh {
-                    pem: config::expand_tilde(&t.pem),
+                    pem: self.config.resolve_pem(&t.pem),
                     elb_host: t.elb_host.clone(),
                     remote_port: t.remote_port,
                     ec2_host: t.ec2_host.clone(),

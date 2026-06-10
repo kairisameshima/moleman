@@ -10,6 +10,11 @@ const DEFAULT_CONFIG: &str = r#"# moleman configuration
 # Region used for all AWS calls and tunnels.
 region = "us-east-1"
 
+# Directory where ssh PEM keys live (never tracked by any repo). Bare filenames
+# in `pem = ...` entries below are resolved against this directory; absolute or
+# ~/ paths are used as-is.
+pem_dir = "~/.config/moleman/pems"
+
 [services]
 # ECS/Cloud Map services are discovered live from Cloud Map; this profile +
 # bastion are what the discovery and port-forward calls run against.
@@ -41,7 +46,7 @@ local_port_base = 5433
 #   [[temporal]]
 #   name = "temporal-dev"
 #   local_port = 8081
-#   pem = "~/.ssh/your-bastion-key.pem"
+#   pem = "your-bastion-key.pem"   # resolved against pem_dir
 #   elb_host = "internal-your-elb.us-east-1.elb.amazonaws.com"
 #   remote_port = 80
 #   ec2_host = "203.0.113.10"
@@ -51,6 +56,8 @@ local_port_base = 5433
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub region: String,
+    #[serde(default = "default_pem_dir")]
+    pub pem_dir: String,
     pub services: ServicesCfg,
     pub rds: RdsCfg,
     #[serde(default)]
@@ -98,6 +105,9 @@ fn default_rds_port_base() -> u16 {
 fn default_ec2_user() -> String {
     "ec2-user".to_string()
 }
+fn default_pem_dir() -> String {
+    "~/.config/moleman/pems".to_string()
+}
 
 impl Config {
     /// Load the config, scaffolding a default one on first run. Returns the
@@ -117,6 +127,17 @@ impl Config {
         let cfg: Config =
             toml::from_str(&text).with_context(|| format!("parsing config {}", path.display()))?;
         Ok((cfg, path))
+    }
+
+    /// Resolve a `pem` config value to a path: bare filenames land in `pem_dir`
+    /// (the untracked key folder); anything with a separator or `~` is a path
+    /// of its own.
+    pub fn resolve_pem(&self, pem: &str) -> PathBuf {
+        if pem.contains('/') || pem.starts_with('~') {
+            expand_tilde(pem)
+        } else {
+            expand_tilde(&self.pem_dir).join(pem)
+        }
     }
 }
 

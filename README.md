@@ -31,7 +31,9 @@ terminal.
   configured with your SSO profiles
 - [`session-manager-plugin`](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
   (required for SSM port-forwarding)
-- `ssh` and your Temporal PEM keys (default location `~/Downloads/`, mode `0600`)
+- `ssh` and your tunnel PEM keys, placed in `~/.config/moleman/pems/` (mode `0600`).
+  Bare filenames in config resolve there; the folder lives outside any repo so
+  keys can never be committed.
 
 ## Run
 
@@ -40,9 +42,10 @@ cargo run            # debug
 cargo build --release && ./target/release/moleman
 ```
 
-On first run it writes a config to `~/.config/moleman/config.toml` seeded with
-the known service ports, RDS bastions (per SSO session), and Temporal entries.
-Edit that file to add tunnels, remap ports, or point at moved PEM keys.
+On first run it writes a placeholder config to `~/.config/moleman/config.toml`.
+Edit it to add your bastions, service ports, RDS bastions (per SSO session),
+and ssh tunnel entries. `pem = "name.pem"` resolves against `pem_dir`
+(default `~/.config/moleman/pems/`); absolute or `~/` paths are used as-is.
 
 ## Keys
 
